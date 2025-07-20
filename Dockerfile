@@ -8,14 +8,17 @@ RUN apt-get update && \
 # Set working directory
 WORKDIR /app
 
-# Download and extract Gunbot
+# Download and extract Gunbot binary
 RUN curl -L -o gunthy_linux.zip https://gunthy.org/downloads/gunthy_linux.zip && \
     unzip gunthy_linux.zip && \
     rm gunthy_linux.zip && \
     chmod +x gunthy-linux
 
-# Expose port used for web GUI
+# Create a default data directory (optional)
+RUN mkdir -p /app/gbuserdata
+
+# Expose web GUI port
 EXPOSE 5010
 
-# Run Gunbot
+# Set default entrypoint
 ENTRYPOINT ["./gunthy-linux"]
