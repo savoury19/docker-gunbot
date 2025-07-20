@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 FROM debian:bookworm-slim AS builder
 
 ARG GBACTIVATEBETA=0
@@ -34,7 +33,8 @@ ENV GBPORT=5010
 RUN apt-get update \
  && apt-get install -y chrony jq unzip openssl fontconfig \
  && rm -rf /var/lib/apt/lists/* \
- && mkdir -p "${GBMOUNT}"
+ && mkdir -p "${GBMOUNT}" \
+ && mkdir -p "${GBINSTALLLOC}"
 
 COPY --from=builder "${GBINSTALLLOC}" "${GBINSTALLLOC}"
 
