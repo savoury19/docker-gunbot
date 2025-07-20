@@ -1,63 +1,78 @@
-ARG DEBIANVERSION="bookworm-slim"
-ARG GBACTIVATEBETA="0"
+# Use an official Debian as a parent image
+FROM debian:bookworm-slim
 
-FROM debian:${DEBIANVERSION} AS gunbot-builder
-ARG GBACTIVATEBETA
-ARG GBINSTALLLOC="/opt/gunbot"
-ARG GBMOUNT="/mnt/gunbot"
-ARG GBBETA="gunthy-linux.zip"
+# Set environment variables
+ENV GBINSTALLLOC="/opt/gunbot"
+ENV GBMOUNT="/mnt/gunbot"
+ENV GBPORT=5010
 
-WORKDIR /tmp
-
-RUN apt-get update && apt-get install -y wget jq unzip openssl && rm -rf /var/lib/apt/lists/* \
-  && wget -q -nv -O gunthy-linux.zip https://gunthy.org/downloads/gunthy_linux.zip \
-  && unzip gunthy-linux.zip \
-  && mv gunthy-linux gunbot \
-  && rm gunthy-linux.zip \
-  && if [ "${GBACTIVATEBETA}" = "1" ]; then \
-       wget -q -nv -O gunthy-linux-beta.zip https://gunthy.org/downloads/beta/gunthy-linux.zip && \
-       unzip -o gunthy-linux-beta.zip && \
-       mv -f gunthy-linux gunbot && \
-       rm gunthy-linux-beta.zip; \
-     fi \
-  && printf "[req]\ndistinguished_name = req_distinguished_name\nprompt = no\n[req_distinguished_name]\ncommonName = localhost\n[v3_req]\nbasicConstraints = CA:FALSE\nsubjectKeyIdentifier = hash\nauthorityKeyIdentifier = keyid:always, issuer:always\nkeyUsage = nonRepudiation, digitalSignature, keyEncipherment, keyAgreement\nextendedKeyUsage = serverAuth\nsubjectAltName = DNS:localhost\n" > gunbot/ssl.config \
-  && printf "#!/bin/bash\n" > gunbot/startup.sh \
-  && printf "if [ -f ${GBMOUNT}/${GBBETA} ]; then unzip -d ${GBMOUNT} ${GBMOUNT}/${GBBETA}; mv ${GBMOUNT}/gunthy-linux ${GBINSTALLLOC}; fi\n" >> gunbot/startup.sh \
-  && printf "if [ -f ${GBMOUNT}/ssl.config ]; then ln -sf ${GBMOUNT}/ssl.config ${GBINSTALLLOC}/ssl.config; fi\n" >> gunbot/startup.sh \
-  && printf "if [ ! -f ${GBMOUNT}/localhost.crt ] && [ ! -f ${GBMOUNT}/localhost.key ]; then openssl req -config ${GBINSTALLLOC}/ssl.config -newkey rsa:2048 -nodes -keyout ${GBINSTALLLOC}/localhost.key -x509 -days 365 -out ${GBINSTALLLOC}/localhost.crt -extensions v3_req 2>/dev/null; else ln -sf ${GBMOUNT}/localhost.crt ${GBINSTALLLOC}/localhost.crt; fi\n" >> gunbot/startup.sh \
-  && for d in json logs backups customStrategies user_modules; do \
-       printf "if [ -L ${GBINSTALLLOC}/$d ]; then if [ ! -d ${GBMOUNT}/$d ]; then mkdir -p ${GBMOUNT}/$d; fi; else mkdir -p ${GBMOUNT}/$d; ln -sf ${GBMOUNT}/$d ${GBINSTALLLOC}/$d; fi\n" >> gunbot/startup.sh; \
-     done \
-  && for f in config.js UTAconfig.json autoconfig.json gunbotgui.db new_gui.sqlite; do \
-       printf "if [ ! -f ${GBMOUNT}/$f ]; then cp ${GBINSTALLLOC}/$f ${GBMOUNT}/$f; fi; ln -sf ${GBMOUNT}/$f ${GBINSTALLLOC}/$f\n" >> gunbot/startup.sh; \
-     done \
-  && chmod +x gunbot/startup.sh
-
-################################################################################
-FROM debian:${DEBIANVERSION}
-ARG MAINTAINER="savoury19"
-ARG WEBSITE="https://gunthy.org/downloads/"
-ARG DESCRIPTION
-ARG GBINSTALLLOC="/opt/gunbot"
-ARG GBMOUNT="/mnt/gunbot"
-ARG GBPORT=5010
-
-ENV IMAGE_DESCRIPTION=${DESCRIPTION:-"Unofficial Gunbot Docker Container"}
-
-LABEL maintainer="${MAINTAINER}" \
-      website="${WEBSITE}" \
-      description="${IMAGE_DESCRIPTION}"
-
-RUN apt-get update && apt-get install -y chrony jq unzip openssl fontconfig \
-  && apt-get upgrade -y && apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/* \
-  && mkdir -p "${GBMOUNT}"
-
-COPY --from=gunbot-builder /tmp/gunbot ${GBINSTALLLOC}
+# Set the working directory
 WORKDIR ${GBINSTALLLOC}
 
-RUN chmod +x startup.sh \
-  && [ -f custom.sh ] && chmod +x custom.sh || true \
-  && [ -f runner.sh ] && chmod +x runner.sh || true
+# Install necessary packages
+RUN apt-get update \
+ && apt-get install -y wget jq unzip openssl fontconfig \
+ && rm -rf /var/lib/apt/lists/* \
+ && mkdir -p "${GBMOUNT}"
 
-EXPOSE ${GBPORT}
-CMD ["bash", "${GBINSTALLLOC}/startup.sh"]
+# Copy the Gunbot files
+COPY gunbot ${GBINSTALLLOC}
+
+# Set the entrypoint with an inline shell script
+ENTRYPOINT ["/bin/bash", "-c", "
+  set -e;
+
+  # Ensure persistent directories exist and are symlinked
+  for d in json logs backups customStrategies user_modules; do
+    mkdir -p \"${GBMOUNT}/${d}\";
+    ln -sfn \"${GBMOUNT}/${d}\" \"${GBINSTALLLOC}/${d}\";
+  done;
+
+  echo '';
+  echo '🔐 Certificate and key files:';
+  for f in server.cert server.key; do
+    if [ -f \"./${f}\" ]; then
+      echo \"👉 Overwriting ${f} from host.\";
+      cp -f \"./${f}\" \"${GBMOUNT}/${f}\";
+    else
+      echo \"👉 Overwriting ${f} from image defaults.\";
+      cp -f \"${GBINSTALLLOC}/${f}\" \"${GBMOUNT}/${f}\";
+    fi;
+    ln -sfn \"${GBMOUNT}/${f}\" \"${GBINSTALLLOC}/${f}\";
+  done;
+
+  echo '';
+  # Ask user whether to overwrite config.js
+  while true; do
+    read -p \"Overwrite config.js? (y/n): \" yn;
+    case \$yn in
+      [Yy]* )
+        if [ -f \"./config.js\" ]; then
+          echo \"👉 Overwriting config.js from host.\";
+          cp -f \"./config.js\" \"${GBMOUNT}/config.js\";
+        else
+          echo \"👉 Overwriting config.js from image defaults.\";
+          cp -f \"${GBINSTALLLOC}/config.js\" \"${GBMOUNT}/config.js\";
+        fi;
+        ln -sfn \"${GBMOUNT}/config.js\" \"${GBINSTALLLOC}/config.js\";
+        break;
+        ;;
+      [Nn]* )
+        echo \"❌ Skipping config.js overwrite.\";
+        # If it already exists in volume, good; otherwise leave image default in place
+        if [ -f \"${GBMOUNT}/config.js\" ]; then
+          ln -sfn \"${GBMOUNT}/config.js\" \"${GBINSTALLLOC}/config.js\";
+        fi;
+        break;
+        ;;
+      * ) echo \"Please enter y or n.\";;
+    esac
+  done;
+
+  echo '';
+  echo '🚀 Starting Gunbot...';
+  exec \"$@\";
+"]
+
+# Default command
+CMD ["bash", "/opt/gunbot/startup.sh"]
