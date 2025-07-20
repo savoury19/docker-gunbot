@@ -1,38 +1,48 @@
 FROM debian:bookworm-slim
 
+# Environment setup
 ENV GBINSTALLLOC="/opt/gunbot"
 ENV GBMOUNT="/mnt/gunbot"
 ENV GBPORT=5010
 
+# Set working directory to Gunbot install location
 WORKDIR ${GBINSTALLLOC}
 
+# Install dependencies
 RUN apt-get update \
  && apt-get install -y wget jq unzip openssl fontconfig ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
  && mkdir -p "${GBINSTALLLOC}" "${GBMOUNT}"
 
-# Download Gunbot binary zip, trying both filenames (gunthy-linux.zip and gunthy_linux.zip)
-# Replace these URLs with the exact ones you want to use for download
+# Download and unzip gunthy-linux binary
+# 🔁 Replace the URLs below with your actual working download locations
 RUN set -eux; \
-  echo "Downloading Gunbot binary..."; \
-  wget -O gunthy.zip "https://your-download-location.com/gunthy-linux.zip" || true; \
-  if [ ! -f gunthy.zip ] || [ ! -s gunthy.zip ]; then \
-    echo "Trying alternate filename..."; \
-    wget -O gunthy.zip "https://your-download-location.com/gunthy_linux.zip"; \
-  fi; \
-  unzip -o gunthy.zip -d . ; \
-  rm -f gunthy.zip ; \
-  chmod +x gunthy-linux
+  echo "📥 Downloading gunthy-linux.zip..."; \
+  wget -O gunthy.zip "https://github.com/GuntharDeNiro/BTCT/releases/latest/download/gunthy-linux.zip" || \
+  wget -O gunthy.zip "https://github.com/GuntharDeNiro/BTCT/releases/latest/download/gunthy_linux.zip"; \
+  echo "📦 Extracting..."; \
+  unzip -o gunthy.zip -d .; \
+  rm -f gunthy.zip; \
+  chmod +x ./gunthy-linux
 
+# Copy entrypoint script
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# If you have a startup.sh locally, copy it; else create a simple one
+# Optional: copy or create a startup.sh
 COPY startup.sh ${GBINSTALLLOC}/startup.sh
 RUN chmod +x ${GBINSTALLLOC}/startup.sh || echo "No startup.sh provided, using default"
-RUN if [ ! -f ${GBINSTALLLOC}/startup.sh ]; then echo -e '#!/bin/bash\nexec ./gunthy-linux' > ${GBINSTALLLOC}/startup.sh && chmod +x ${GBINSTALLLOC}/startup.sh; fi
 
+# Fallback: create a basic startup.sh if none exists
+RUN if [ ! -f ${GBINSTALLLOC}/startup.sh ]; then \
+      echo '#!/bin/bash' > ${GBINSTALLLOC}/startup.sh && \
+      echo 'exec ./gunthy-linux' >> ${GBINSTALLLOC}/startup.sh && \
+      chmod +x ${GBINSTALLLOC}/startup.sh; \
+    fi
+
+# Expose Gunbot web UI/API port
 EXPOSE ${GBPORT}
 
+# Entrypoint and default command
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["bash", "/opt/gunbot/startup.sh"]
