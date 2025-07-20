@@ -1,48 +1,36 @@
-FROM debian:bookworm-slim AS builder
-
-ARG GBACTIVATEBETA=0
-ARG GBINSTALLLOC="/opt/gunbot"
-ARG GBMOUNT="/mnt/gunbot"
-
-WORKDIR /tmp
-
-RUN apt-get update \
- && apt-get install -y wget unzip \
- && rm -rf /var/lib/apt/lists/* \
- \
- # Download stable release
- && wget -q -O gunthy-linux.zip https://gunthy.org/downloads/gunthy_linux.zip \
- && unzip gunthy-linux.zip \
- && mv gunthy-linux "${GBINSTALLLOC}" \
- && rm gunthy-linux.zip \
- \
- # Optionally download beta version
- && if [ "$GBACTIVATEBETA" = "1" ]; then \
-      wget -q -O gunthy-linux-beta.zip https://gunthy.org/downloads/beta/gunthy-linux.zip && \
-      unzip -o gunthy-linux-beta.zip && \
-      mv -f gunthy-linux "${GBINSTALLLOC}" && \
-      rm gunthy-linux-beta.zip; \
-    fi
-
 FROM debian:bookworm-slim
 
 ENV GBINSTALLLOC="/opt/gunbot"
 ENV GBMOUNT="/mnt/gunbot"
 ENV GBPORT=5010
 
+WORKDIR ${GBINSTALLLOC}
+
 RUN apt-get update \
- && apt-get install -y chrony jq unzip openssl fontconfig \
+ && apt-get install -y wget jq unzip openssl fontconfig ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
- && mkdir -p "${GBMOUNT}" \
- && mkdir -p "${GBINSTALLLOC}"
+ && mkdir -p "${GBINSTALLLOC}" "${GBMOUNT}"
 
-COPY --from=builder "${GBINSTALLLOC}" "${GBINSTALLLOC}"
+# Download Gunbot binary zip, trying both filenames (gunthy-linux.zip and gunthy_linux.zip)
+# Replace these URLs with the exact ones you want to use for download
+RUN set -eux; \
+  echo "Downloading Gunbot binary..."; \
+  wget -O gunthy.zip "https://your-download-location.com/gunthy-linux.zip" || true; \
+  if [ ! -f gunthy.zip ] || [ ! -s gunthy.zip ]; then \
+    echo "Trying alternate filename..."; \
+    wget -O gunthy.zip "https://your-download-location.com/gunthy_linux.zip"; \
+  fi; \
+  unzip -o gunthy.zip -d . ; \
+  rm -f gunthy.zip ; \
+  chmod +x gunthy-linux
 
-WORKDIR "${GBINSTALLLOC}"
-
-# Copy entrypoint script
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# If you have a startup.sh locally, copy it; else create a simple one
+COPY startup.sh ${GBINSTALLLOC}/startup.sh
+RUN chmod +x ${GBINSTALLLOC}/startup.sh || echo "No startup.sh provided, using default"
+RUN if [ ! -f ${GBINSTALLLOC}/startup.sh ]; then echo -e '#!/bin/bash\nexec ./gunthy-linux' > ${GBINSTALLLOC}/startup.sh && chmod +x ${GBINSTALLLOC}/startup.sh; fi
 
 EXPOSE ${GBPORT}
 
