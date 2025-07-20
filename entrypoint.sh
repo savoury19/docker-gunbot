@@ -1,50 +1,50 @@
-# syntax=docker/dockerfile:1
-FROM debian:bookworm-slim AS builder
+#!/bin/bash
+set -e
 
-ARG GBACTIVATEBETA=0
-ARG GBINSTALLLOC="/opt/gunbot"
-ARG GBMOUNT="/mnt/gunbot"
+# 1. Ensure persistent directories and symlinks
+for d in json logs backups customStrategies user_modules; do
+  mkdir -p "${GBMOUNT}/${d}"
+  ln -sfn "${GBMOUNT}/${d}" "${GBINSTALLLOC}/${d}"
+done
 
-WORKDIR /tmp
+echo
+echo "🔐 Cert/key files:"
+for f in server.cert server.key; do
+  if [ -f "./${f}" ]; then
+    echo "👉 Overwriting ${f} from host."
+    cp -f "./${f}" "${GBMOUNT}/${f}"
+  elif [ -f "${GBINSTALLLOC}/${f}" ]; then
+    echo "👉 Overwriting ${f} from image defaults."
+    cp -f "${GBINSTALLLOC}/${f}" "${GBMOUNT}/${f}"
+  else
+    echo "⚠️ No ${f} found in host or image — skipping."
+    continue
+  fi
+  ln -sfn "${GBMOUNT}/${f}" "${GBINSTALLLOC}/${f}"
+done
 
-RUN apt-get update \
- && apt-get install -y wget unzip \
- && rm -rf /var/lib/apt/lists/* \
- \
- # Download stable release
- && wget -q -O gunthy-linux.zip https://gunthy.org/downloads/gunthy_linux.zip \
- && unzip gunthy-linux.zip \
- && mv gunthy-linux "${GBINSTALLLOC}" \
- && rm gunthy-linux.zip \
- \
- # Optionally download beta version
- && if [ "$GBACTIVATEBETA" = "1" ]; then \
-      wget -q -O gunthy-linux-beta.zip https://gunthy.org/downloads/beta/gunthy-linux.zip && \
-      unzip -o gunthy-linux-beta.zip && \
-      mv -f gunthy-linux "${GBINSTALLLOC}" && \
-      rm gunthy-linux-beta.zip; \
-    fi
+echo
+while true; do
+  read -p "Overwrite config.js? (y/n): " yn
+  case $yn in
+    [Yy]* )
+      if [ -f "./config.js" ]; then
+        cp -f "./config.js" "${GBMOUNT}/config.js"
+      elif [ -f "${GBINSTALLLOC}/config.js" ]; then
+        cp -f "${GBINSTALLLOC}/config.js" "${GBMOUNT}/config.js"
+      else
+        echo "⚠️ No config.js found in host or container—skipping copy."
+      fi
+      ln -sfn "${GBMOUNT}/config.js" "${GBINSTALLLOC}/config.js"
+      break;;
+    [Nn]* )
+      echo "❌ Skipping config.js overwrite."
+      [ -f "${GBMOUNT}/config.js" ] && ln -sfn "${GBMOUNT}/config.js" "${GBINSTALLLOC}/config.js"
+      break;;
+    * ) echo "Please answer y or n.";;
+  esac
+done
 
-FROM debian:bookworm-slim
-
-ENV GBINSTALLLOC="/opt/gunbot"
-ENV GBMOUNT="/mnt/gunbot"
-ENV GBPORT=5010
-
-RUN apt-get update \
- && apt-get install -y chrony jq unzip openssl fontconfig \
- && rm -rf /var/lib/apt/lists/* \
- && mkdir -p "${GBMOUNT}"
-
-COPY --from=builder "${GBINSTALLLOC}" "${GBINSTALLLOC}"
-
-WORKDIR "${GBINSTALLLOC}"
-
-# Copy entrypoint script
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
-
-EXPOSE ${GBPORT}
-
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD ["bash", "/opt/gunbot/startup.sh"]
+echo
+echo "🚀 Starting Gunbot..."
+exec "$@"
