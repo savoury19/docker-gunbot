@@ -14,10 +14,13 @@ RUN curl -L -o gunthy_linux.zip https://gunthy.org/downloads/gunthy_linux.zip &&
     rm gunthy_linux.zip && \
     chmod +x gunthy-linux
 
-# Optional: Create persistent userdata folder
-RUN mkdir -p /app/gbuserdata
+# Create required directories
+RUN mkdir -p /opt/gunbot/json /app/gbuserdata
 
-# Expose web GUI port
+# Optional: Symlink userdata for consistency
+RUN ln -s /app/gbuserdata /opt/gunbot/json
+
+# Expose Gunbot web GUI port
 EXPOSE 5010
 
 # Start Gunbot
