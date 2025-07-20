@@ -13,7 +13,7 @@ RUN apt-get update \
  && mkdir -p "${GBINSTALLLOC}" "${GBMOUNT}"
 
 # Download Gunbot binary (adjust URL if needed)
-RUN wget -O gunthy.zip https://github.com/savoury19/gunbot-docker/raw/main/gunthy-linux.zip \
+RUN wget -O gunthy.zip https://gunthy.org/downloads/gunthy_linux.zip
  && unzip gunthy.zip \
  && rm gunthy.zip \
  && chmod +x gunthy-linux
