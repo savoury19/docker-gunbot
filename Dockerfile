@@ -16,7 +16,7 @@ RUN apt-get update \
 RUN wget -O gunthy.zip https://gunthy.org/downloads/gunthy_linux.zip
  && unzip gunthy.zip \
  && rm gunthy.zip \
- && chmod +x gunthy-linux
+ && chmod +x gunthy_linux
 
 # Add entrypoint script
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
