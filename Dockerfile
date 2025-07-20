@@ -21,7 +21,7 @@ RUN mkdir -p /opt/gunbot/json /app/gbuserdata
 RUN ln -s /app/gbuserdata /opt/gunbot/json
 
 # Expose Gunbot web GUI port
-EXPOSE 5010
+EXPOSE 3001
 
 # Start Gunbot
 ENTRYPOINT ["./gunthy-linux"]
