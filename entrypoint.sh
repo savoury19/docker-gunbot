@@ -1,48 +1,61 @@
-FROM debian:bookworm-slim
+#!/bin/bash
+set -e
 
-# Environment setup
-ENV GBINSTALLLOC="/opt/gunbot"
-ENV GBMOUNT="/mnt/gunbot"
-ENV GBPORT=5010
+# Ensure required env vars are set
+: "${GBINSTALLLOC:=/opt/gunbot}"
+: "${GBMOUNT:=/mnt/gunbot}"
 
-# Set working directory to Gunbot install location
-WORKDIR ${GBINSTALLLOC}
+echo "📁 Setting up persistent directories and symlinks..."
+for d in json logs backups customStrategies user_modules; do
+  mkdir -p "${GBMOUNT}/${d}"
+  ln -sfn "${GBMOUNT}/${d}" "${GBINSTALLLOC}/${d}"
+done
 
-# Install dependencies
-RUN apt-get update \
- && apt-get install -y wget jq unzip openssl fontconfig ca-certificates \
- && rm -rf /var/lib/apt/lists/* \
- && mkdir -p "${GBINSTALLLOC}" "${GBMOUNT}"
+echo
+echo "🔐 Handling SSL cert/key files..."
+for f in server.cert server.key; do
+  if [ -f "./${f}" ]; then
+    echo "👉 Overwriting ${f} from host context."
+    cp -f "./${f}" "${GBMOUNT}/${f}"
+  elif [ -f "${GBINSTALLLOC}/${f}" ]; then
+    echo "👉 Using ${f} from image."
+    cp -f "${GBINSTALLLOC}/${f}" "${GBMOUNT}/${f}"
+  else
+    echo "⚠️  ${f} not found — skipping."
+    continue
+  fi
+  ln -sfn "${GBMOUNT}/${f}" "${GBINSTALLLOC}/${f}"
+done
 
-# Download and unzip gunthy-linux binary
-# 🔁 Replace the URLs below with your actual working download locations
-RUN set -eux; \
-  echo "📥 Downloading gunthy-linux.zip..."; \
-  wget -O gunthy.zip "https://github.com/GuntharDeNiro/BTCT/releases/latest/download/gunthy-linux.zip" || \
-  wget -O gunthy.zip "https://github.com/GuntharDeNiro/BTCT/releases/latest/download/gunthy_linux.zip"; \
-  echo "📦 Extracting..."; \
-  unzip -o gunthy.zip -d .; \
-  rm -f gunthy.zip; \
-  chmod +x ./gunthy-linux
+echo
+# Prompt for config.js overwrite
+while true; do
+  read -p "❓ Overwrite config.js from host/image? (y/n): " yn
+  case $yn in
+    [Yy]* )
+      if [ -f "./config.js" ]; then
+        echo "👉 Copying config.js from host context."
+        cp -f "./config.js" "${GBMOUNT}/config.js"
+      elif [ -f "${GBINSTALLLOC}/config.js" ]; then
+        echo "👉 Copying config.js from image."
+        cp -f "${GBINSTALLLOC}/config.js" "${GBMOUNT}/config.js"
+      else
+        echo "⚠️  No config.js found in host or image — skipping."
+      fi
+      ln -sfn "${GBMOUNT}/config.js" "${GBINSTALLLOC}/config.js"
+      break
+      ;;
+    [Nn]* )
+      echo "❌ Skipping config.js overwrite."
+      [ -f "${GBMOUNT}/config.js" ] && ln -sfn "${GBMOUNT}/config.js" "${GBINSTALLLOC}/config.js"
+      break
+      ;;
+    * )
+      echo "Please answer y or n."
+      ;;
+  esac
+done
 
-# Copy entrypoint script
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
-
-# Optional: copy or create a startup.sh
-COPY startup.sh ${GBINSTALLLOC}/startup.sh
-RUN chmod +x ${GBINSTALLLOC}/startup.sh || echo "No startup.sh provided, using default"
-
-# Fallback: create a basic startup.sh if none exists
-RUN if [ ! -f ${GBINSTALLLOC}/startup.sh ]; then \
-      echo '#!/bin/bash' > ${GBINSTALLLOC}/startup.sh && \
-      echo 'exec ./gunthy-linux' >> ${GBINSTALLLOC}/startup.sh && \
-      chmod +x ${GBINSTALLLOC}/startup.sh; \
-    fi
-
-# Expose Gunbot web UI/API port
-EXPOSE ${GBPORT}
-
-# Entrypoint and default command
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD ["bash", "/opt/gunbot/startup.sh"]
+echo
+echo "🚀 Starting Gunbot..."
+exec "$@"
