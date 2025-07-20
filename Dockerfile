@@ -1,33 +1,50 @@
+# syntax=docker/dockerfile:1
+FROM debian:bookworm-slim AS builder
+
+ARG GBACTIVATEBETA=0
+ARG GBINSTALLLOC="/opt/gunbot"
+ARG GBMOUNT="/mnt/gunbot"
+
+WORKDIR /tmp
+
+RUN apt-get update \
+ && apt-get install -y wget unzip \
+ && rm -rf /var/lib/apt/lists/* \
+ \
+ # Download stable release
+ && wget -q -O gunthy-linux.zip https://gunthy.org/downloads/gunthy_linux.zip \
+ && unzip gunthy-linux.zip \
+ && mv gunthy-linux "${GBINSTALLLOC}" \
+ && rm gunthy-linux.zip \
+ \
+ # Optionally download beta version
+ && if [ "$GBACTIVATEBETA" = "1" ]; then \
+      wget -q -O gunthy-linux-beta.zip https://gunthy.org/downloads/beta/gunthy-linux.zip && \
+      unzip -o gunthy-linux-beta.zip && \
+      mv -f gunthy-linux "${GBINSTALLLOC}" && \
+      rm gunthy-linux-beta.zip; \
+    fi
+
 FROM debian:bookworm-slim
 
-# Set environment variables with default values
 ENV GBINSTALLLOC="/opt/gunbot"
 ENV GBMOUNT="/mnt/gunbot"
 ENV GBPORT=5010
 
-# Set working directory to where Gunbot will run from
-WORKDIR ${GBINSTALLLOC}
-
-# Install minimal dependencies
 RUN apt-get update \
- && apt-get install -y wget jq unzip openssl fontconfig \
+ && apt-get install -y chrony jq unzip openssl fontconfig \
  && rm -rf /var/lib/apt/lists/* \
- && mkdir -p "${GBINSTALLLOC}" "${GBMOUNT}"
+ && mkdir -p "${GBMOUNT}"
 
-# Copy the entrypoint script and make it executable
+COPY --from=builder "${GBINSTALLLOC}" "${GBINSTALLLOC}"
+
+WORKDIR "${GBINSTALLLOC}"
+
+# Copy entrypoint script
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# Copy Gunbot binary and startup script into the install location
-COPY gunthy-linux "${GBINSTALLLOC}/gunthy-linux"
-COPY startup.sh "${GBINSTALLLOC}/startup.sh"
-
-# Optional: Ensure correct permissions
-RUN chmod +x "${GBINSTALLLOC}/gunthy-linux" "${GBINSTALLLOC}/startup.sh"
-
-# Expose Gunbot UI/API port
 EXPOSE ${GBPORT}
 
-# Set entrypoint and default command
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["bash", "/opt/gunbot/startup.sh"]
