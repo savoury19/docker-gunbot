@@ -24,7 +24,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Add default startup.sh if none provided
 RUN echo '#!/bin/bash' > ${GBINSTALLLOC}/startup.sh \
- && echo 'exec ./gunthy-linux' >> ${GBINSTALLLOC}/startup.sh \
+ && echo 'exec ./gunthy_linux' >> ${GBINSTALLLOC}/startup.sh \
  && chmod +x ${GBINSTALLLOC}/startup.sh
 
 EXPOSE ${GBPORT}
