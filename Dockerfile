@@ -36,8 +36,8 @@ RUN apt-get update && apt-get install -y wget jq unzip \
   #remove mirrors
   && rm -rf /var/lib/apt/lists/* \
   #pull ${GUNBOTVERSION} from official Gunbot site.
-  && wget -q -nv -O gunthy_linux.zip $(wget -q -nv -O- https://gunthy.org/downloads/gunthy_linux.zip
-   unzip -d . gunthy_linux.zip \
+  && wget -q -nv -O gunthy_linux.zip https://gunthy.org/downloads/gunthy_linux.zip
+  && unzip -d . gunthy_linux.zip \
   && mv gunthy_linux gunbot \
   #check for gunbot beta activation
   && if [ "$GBACTIVATEBETA" = 1 ]; then \
