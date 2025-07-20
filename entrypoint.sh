@@ -1,75 +1,50 @@
-#!/bin/bash
-set -e
+# syntax=docker/dockerfile:1
+FROM debian:bookworm-slim AS builder
 
-# Set default values if not provided
-: "${GBMOUNT:=/mnt/gunbot}"
-: "${GBINSTALLLOC:=/opt/gunbot}"
+ARG GBACTIVATEBETA=0
+ARG GBINSTALLLOC="/opt/gunbot"
+ARG GBMOUNT="/mnt/gunbot"
 
-echo "🔧 Creating persistent directories and symlinks..."
-for d in json logs backups customStrategies user_modules; do
-  mkdir -p "${GBMOUNT}/${d}"
-  ln -sfn "${GBMOUNT}/${d}" "${GBINSTALLLOC}/${d}"
-done
+WORKDIR /tmp
 
-echo
-echo "🔐 Setting up certificate and key files..."
-for f in server.cert server.key; do
-  if [ -f "./${f}" ]; then
-    echo "👉 Copying ${f} from host to volume."
-    cp -f "./${f}" "${GBMOUNT}/${f}"
-  elif [ -f "${GBINSTALLLOC}/${f}" ]; then
-    echo "👉 Copying ${f} from image defaults to volume."
-    cp -f "${GBINSTALLLOC}/${f}" "${GBMOUNT}/${f}"
-  else
-    echo "⚠️ No ${f} found — skipping."
-    continue
-  fi
-  ln -sfn "${GBMOUNT}/${f}" "${GBINSTALLLOC}/${f}"
-done
+RUN apt-get update \
+ && apt-get install -y wget unzip \
+ && rm -rf /var/lib/apt/lists/* \
+ \
+ # Download stable release
+ && wget -q -O gunthy-linux.zip https://gunthy.org/downloads/gunthy_linux.zip \
+ && unzip gunthy-linux.zip \
+ && mv gunthy-linux "${GBINSTALLLOC}" \
+ && rm gunthy-linux.zip \
+ \
+ # Optionally download beta version
+ && if [ "$GBACTIVATEBETA" = "1" ]; then \
+      wget -q -O gunthy-linux-beta.zip https://gunthy.org/downloads/beta/gunthy-linux.zip && \
+      unzip -o gunthy-linux-beta.zip && \
+      mv -f gunthy-linux "${GBINSTALLLOC}" && \
+      rm gunthy-linux-beta.zip; \
+    fi
 
-echo
-echo "⚙️  Handling config.js setup..."
+FROM debian:bookworm-slim
 
-# Handle interactive or automated overwrite of config.js
-OVERWRITE_MODE="${OVERWRITE_CONFIG:-ask}"  # yes / no / ask
+ENV GBINSTALLLOC="/opt/gunbot"
+ENV GBMOUNT="/mnt/gunbot"
+ENV GBPORT=5010
 
-if [[ "$OVERWRITE_MODE" == "yes" ]]; then
-  yn="y"
-elif [[ "$OVERWRITE_MODE" == "no" ]]; then
-  yn="n"
-else
-  echo
-  echo "📝 config.js found. You can choose to overwrite it from:"
-  echo "   - Host path: ./config.js"
-  echo "   - Container image: ${GBINSTALLLOC}/config.js"
-  echo "   - Or skip and use existing volume copy (if any)"
-  echo
-  while true; do
-    read -p "❓ Overwrite config.js in mounted volume? (y/n): " yn
-    case "$yn" in
-      [YyNn]*) break ;;
-      *) echo "⛔ Please enter 'y' or 'n'." ;;
-    esac
-  done
-fi
+RUN apt-get update \
+ && apt-get install -y chrony jq unzip openssl fontconfig \
+ && rm -rf /var/lib/apt/lists/* \
+ && mkdir -p "${GBMOUNT}"
 
-if [[ "$yn" == "y" || "$yn" == "Y" ]]; then
-  if [ -f "./config.js" ]; then
-    echo "✅ Copying config.js from host to volume."
-    cp -f "./config.js" "${GBMOUNT}/config.js"
-  elif [ -f "${GBINSTALLLOC}/config.js" ]; then
-    echo "✅ Copying config.js from image to volume."
-    cp -f "${GBINSTALLLOC}/config.js" "${GBMOUNT}/config.js"
-  else
-    echo "⚠️ No config.js found — skipping copy."
-  fi
-else
-  echo "❌ Skipping config.js overwrite."
-fi
+COPY --from=builder "${GBINSTALLLOC}" "${GBINSTALLLOC}"
 
-# Always link if it exists in volume
-[ -f "${GBMOUNT}/config.js" ] && ln -sfn "${GBMOUNT}/config.js" "${GBINSTALLLOC}/config.js"
+WORKDIR "${GBINSTALLLOC}"
 
-echo
-echo "🚀 Launching Gunbot..."
-exec "$@"
+# Copy entrypoint script
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+EXPOSE ${GBPORT}
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["bash", "/opt/gunbot/startup.sh"]
