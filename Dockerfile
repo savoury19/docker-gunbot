@@ -21,6 +21,7 @@ RUN ln -s /app/gbuserdata /opt/gunbot/json
 
 # Expose Gunbot web GUI port
 EXPOSE 3001
+EXPOSE 5001
 
 # Start Gunbot
 ENTRYPOINT ["./gunthy-linux"]
