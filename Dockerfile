@@ -25,4 +25,4 @@ EXPOSE 3001 5001
 ENV TZ=Australia/Perth
 
 # Start Gunbot
-ENTRYPOINT ["./gunthy-linux"]
+ENTRYPOINT ["./gunthy-linux", "--gui"]
