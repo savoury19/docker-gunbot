@@ -2,7 +2,7 @@ ARG DEBIANVERSION="bookworm-slim"
 ARG GUNBOTVERSION="latest"
 ARG GITHUBOWNER="GuntharDeNiro"
 ARG GITHUBREPO="BTCT"
-ARG GITHUBOWNERBETA="savoury19"
+ARG GITHUBOWNERBETA="computeronix"
 ARG GITHUBREPOBETA="BTCT-Beta"
 ARG GUNBOTBETAVERSION="latest"
 ARG GBINSTALLLOC="/opt/gunbot"
@@ -11,6 +11,7 @@ ARG GBACTIVATEBETA
 ARG GBBETA="gunthy-linux.zip"
 ARG GBPORT=5000
 ARG MAINTAINER="computeronix"
+ARG WEBSITE="https://hub.docker.com/r/computeronix/gunbot"
 ARG DESCRIPTION="(Unofficial) Gunbot Docker Container - ${GUNBOTVERSION}"
 
 #SCRATCH WORKSPACE FOR BUILDING IMAGE
@@ -35,12 +36,12 @@ RUN apt-get update && apt-get install -y wget jq unzip \
   #remove mirrors
   && rm -rf /var/lib/apt/lists/* \
   #pull ${GUNBOTVERSION} from official GitHub and extract linux client
-  && wget -q -nv -O gunbot.zip $(wget -q -nv -O- https://gunthy.org/downloads/gunthy_linux.zip |  jq -r '.assets[] | select(.browser_download_url | contains("linux")) | .browser_download_url') \
+  && wget -q -nv -O gunbot.zip $(wget -q -nv -O- https://api.github.com/repos/${GITHUBOWNER}/${GITHUBREPO}/releases/${GUNBOTVERSION} 2>/dev/null |  jq -r '.assets[] | select(.browser_download_url | contains("linux")) | .browser_download_url') \
   && unzip -d . gunbot.zip \
   && mv gunthy_linux gunbot \
   #check for gunbot beta activation
   && if [ "$GBACTIVATEBETA" = 1 ]; then \
-    wget -q -nv -O gunbot-beta.zip $(wget -q -nv -O- https://gunthy.org/downloads/gunthy_linux.zip |  jq -r '.assets[] | select(.browser_download_url | contains("linux")) | .browser_download_url') ; \
+    wget -q -nv -O gunbot-beta.zip $(wget -q -nv -O- https://api.github.com/repos/${GITHUBOWNERBETA}/${GITHUBREPOBETA}/releases/${GUNBOTBETAVERSION} 2>/dev/null |  jq -r '.assets[] | select(.browser_download_url | contains("linux")) | .browser_download_url') ; \
     unzip -d . gunbot-beta.zip ; \
     mv -f gunthy-linux gunbot ; \
   fi \
@@ -200,6 +201,7 @@ RUN apt-get update && apt-get install -y wget jq unzip \
 #BUILD THE RUN IMAGE
 FROM --platform="linux/amd64" debian:${DEBIANVERSION}
 ARG MAINTAINER
+ARG WEBSITE
 ARG DESCRIPTION
 ARG GBINSTALLLOC
 ARG GBBETA
@@ -209,6 +211,7 @@ ENV GUNBOTLOCATION=${GBINSTALLLOC}
 
 LABEL \
   maintainer="${MAINTAINER}" \
+  website="${WEBSITE}" \
   description="${DESCRIPTION}"
 
 COPY --from=gunbot-builder /tmp/gunbot ${GBINSTALLLOC}
