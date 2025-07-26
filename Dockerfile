@@ -1,4 +1,5 @@
-FROM --platform= debian:stable-slim
+FROM --platform=linux/amd64 debian:stable-slim
+
 # Install dependencies
 RUN apt-get update && \
     apt-get install -y curl unzip ca-certificates && \
@@ -14,14 +15,14 @@ RUN curl -L -o gunthy_linux.zip https://gunthy.org/downloads/gunthy_linux.zip &&
     chmod +x gunthy-linux
 
 # Create required directories
-RUN mkdir -p /opt/gunbot/json /app/gbuserdata
+RUN mkdir -p /opt/gunbot/json /app/gbuserdata && \
+    ln -s /app/gbuserdata /opt/gunbot/json
 
-# Optional: Symlink userdata for consistency
-RUN ln -s /app/gbuserdata /opt/gunbot/json
+# Expose Gunbot GUI and service ports
+EXPOSE 3001 5001
 
-# Expose Gunbot web GUI port
-EXPOSE 3001
-EXPOSE 5001
+# Set timezone via environment variable if needed
+ENV TZ=Australia/Perth
 
 # Start Gunbot
 ENTRYPOINT ["./gunthy-linux"]
