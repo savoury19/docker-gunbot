@@ -3,7 +3,6 @@ ARG GBACTIVATEBETA=0
 ARG GBINSTALLLOC="/opt/gunbot"
 ARG GBUSERDATADIR="/app/gbuserdata"
 ARG MAINTAINER="computeronix"
-ARG WEBSITE="https://hub.docker.com/r/computeronix/gunbot"
 ARG DESCRIPTION="(Unofficial) Gunbot Docker Container"
 
 # Builder stage
@@ -13,7 +12,7 @@ ARG GBACTIVATEBETA
 ARG GBINSTALLLOC
 ARG GBUSERDATADIR
 
-WORKDIR /tmp
+WORKDIR /app
 
 RUN apt-get update && apt-get install -y wget unzip \
   && rm -rf /var/lib/apt/lists/* \
@@ -44,7 +43,6 @@ RUN apt-get update && apt-get install -y wget unzip \
 FROM --platform="linux/amd64" debian:${DEBIANVERSION}
 
 ARG MAINTAINER
-ARG WEBSITE
 ARG DESCRIPTION
 ARG GBINSTALLLOC
 ARG GBUSERDATADIR
@@ -53,7 +51,6 @@ ENV TZ=Australia/Perth
 ENV GUNBOTLOCATION=${GBINSTALLLOC}
 
 LABEL maintainer="${MAINTAINER}" \
-      website="${WEBSITE}" \
       description="${DESCRIPTION}"
 
 COPY --from=gunbot-builder ${GBINSTALLLOC} ${GBINSTALLLOC}
